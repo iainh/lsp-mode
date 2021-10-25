@@ -156,7 +156,7 @@ caching purposes.")
 (lsp-defun lsp-headerline--symbol-icon ((&DocumentSymbol :kind))
   "Build the SYMBOL icon for headerline breadcrumb."
   (concat (lsp-icons-get-by-symbol-kind kind 'headerline-breadcrumb)
-          " "))
+          (if lsp-headerline-breadcrumb-icons-enable " ")))
 
 (lsp-defun lsp-headerline--go-to-symbol ((&DocumentSymbol
                                           :selection-range (&RangeToPoint :start selection-start)
@@ -263,7 +263,7 @@ PATH is the current folder to be checked."
          (filename (f-filename file-path)))
     (if-let ((file-ext (f-ext file-path)))
         (concat (lsp-icons-get-by-file-ext file-ext 'headerline-breadcrumb)
-                " "
+                (if lsp-headerline-breadcrumb-icons-enable " ")
                 (propertize filename
                             'font-lock-face
                             (lsp-headerline--face-for-path file-path)))
@@ -361,7 +361,7 @@ PATH is the current folder to be checked."
                            (propertize (number-to-string index)
                                        'face
                                        'lsp-headerline-breadcrumb-symbols-face)
-                           " ")
+                           (if lsp-headerline-breadcrumb-icons-enable " "))
                         "")
                       (if symbol2-icon
                           (concat symbol2-icon symbol2-name)
