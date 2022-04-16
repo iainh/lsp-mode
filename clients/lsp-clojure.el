@@ -78,6 +78,12 @@
   :risky t
   :type 'directory)
 
+(defcustom lsp-clojure-test-tree-position-params nil
+  "The optional test tree position params.
+Defaults to side following treemacs default."
+  :type 'list
+  :group 'lsp-clojure)
+
 ;; Internal
 
 (lsp-interface
@@ -86,9 +92,9 @@
 (lsp-dependency
  'clojure-lsp
  `(:download :url lsp-clojure-server-download-url
-             :decompress :zip
-             :store-path lsp-clojure-server-store-path
-             :set-executable? t)
+   :decompress :zip
+   :store-path lsp-clojure-server-store-path
+   :set-executable? t)
  '(:system "clojure-lsp"))
 
 ;; Refactorings
@@ -187,16 +193,66 @@ If there are more arguments expected after the line and column numbers."
   (interactive)
   (lsp-clojure--refactoring-call "unwind-thread"))
 
+(defun lsp-clojure-create-function ()
+  "Apply create-function refactoring at point."
+  (interactive)
+  (lsp-clojure--refactoring-call "create-function"))
+
 (defun lsp-clojure-create-test ()
   "Apply create-test refactoring at point."
   (interactive)
   (lsp-clojure--refactoring-call "create-test"))
+
+(defun lsp-clojure-sort-map ()
+  "Apply sort-map refactoring at point."
+  (interactive)
+  (lsp-clojure--refactoring-call "sort-map"))
+
+(defun lsp-clojure-move-coll-entry-up ()
+  "Apply move coll entry up refactoring at point."
+  (interactive)
+  (lsp-clojure--refactoring-call "move-coll-entry-up"))
+
+(defun lsp-clojure-move-coll-entry-down ()
+  "Apply move coll entry down refactoring at point."
+  (interactive)
+  (lsp-clojure--refactoring-call "move-coll-entry-down"))
+
+(defun lsp-clojure-move-form ()
+  "Apply move-form refactoring at point."
+  (interactive)
+  (lsp-clojure--refactoring-call "move-form" "/home/greg/dev/clojure-lsp/lib/src/clojure_lsp/shared.clj"))
 
 (defun lsp-clojure-server-info ()
   "Request server info."
   (interactive)
   (lsp--cur-workspace-check)
   (lsp-notify "clojure/serverInfo/log" nil))
+
+(defvar lsp-clojure-server-buffer-name "*lsp-clojure-server-log*")
+
+(defun lsp-clojure--server-log-revert-function (original-file-log-buffer &rest _)
+  "Spit contents to ORIGINAL-FILE-LOG-BUFFER."
+  (with-current-buffer (get-buffer-create lsp-clojure-server-buffer-name)
+    (erase-buffer)
+    (insert (with-current-buffer original-file-log-buffer (buffer-string)))
+    (goto-char (point-max))
+    (read-only-mode)))
+
+(defun lsp-clojure-server-log ()
+  "Open a buffer with the server logs."
+  (interactive)
+  (lsp--cur-workspace-check)
+  (let* ((log-path (-> (lsp--json-serialize (lsp-request "clojure/serverInfo/raw" nil))
+                       (lsp--read-json)
+                       (lsp-get :log-path)))
+         (original-file-log-buffer (find-file-noselect log-path)))
+    (with-current-buffer original-file-log-buffer
+      (add-hook 'after-revert-hook (-partial #'lsp-clojure--server-log-revert-function original-file-log-buffer) nil t)
+      (auto-revert-tail-mode)
+      (read-only-mode))
+    (lsp-clojure--server-log-revert-function original-file-log-buffer)
+    (switch-to-buffer lsp-clojure-server-buffer-name)))
 
 (defun lsp-clojure-server-info-raw ()
   "Request server info raw data."
@@ -214,31 +270,6 @@ If there are more arguments expected after the line and column numbers."
                :position (lsp-make-position :line (- (line-number-at-pos) 1)
                                             :character (current-column)))))
 
-(defun lsp-clojure--ask-macro-to-resolve ()
-  "Ask to user the macro to resolve."
-  (lsp--completing-read
-   "Select how LSP should resolve this macro:"
-   '("clojure.core/def"
-     "clojure.core/defn"
-     "clojure.core/let"
-     "clojure.core/for"
-     "clojure.core/->"
-     "clojure.core/->>"
-     "clj-kondo.lint-as/def-catch-all")
-   #'identity
-   nil
-   t))
-
-(defun lsp-clojure--ask-clj-kondo-config-dir ()
-  "Ask to user the clj-kondo config dir path."
-  (lsp--completing-read
-   "Select where LSP should save this setting:"
-   (list (f-join (expand-file-name "~/") ".config/clj-kondo/config.edn")
-         (f-join (or (lsp-workspace-root) "project") ".clj-kondo/config.edn"))
-   #'identity
-   nil
-   t))
-
 (defun lsp-clojure-resolve-macro-as ()
   "Ask to user how the unresolved macro should be resolved."
   (interactive)
@@ -246,15 +277,7 @@ If there are more arguments expected after the line and column numbers."
   (lsp-clojure--execute-command "resolve-macro-as"
                                 (list (lsp--buffer-uri)
                                       (- (line-number-at-pos) 1) ;; clojure-lsp expects line numbers to start at 0
-                                      (current-column)
-                                      (lsp-clojure--ask-macro-to-resolve)
-                                      (lsp-clojure--ask-clj-kondo-config-dir))))
-
-(lsp-defun lsp-clojure--resolve-macro-as ((&Command :command :arguments?))
-  "Intercept resolve-macro-as command and send all necessary data."
-  (let ((chosen-macro (lsp-clojure--ask-macro-to-resolve))
-        (clj-kondo-config-path (lsp-clojure--ask-clj-kondo-config-dir)))
-    (lsp-clojure--execute-command command (append arguments? (list chosen-macro clj-kondo-config-path)))))
+                                      (current-column))))
 
 (defun lsp-clojure--ensure-dir (path)
   "Ensure that directory PATH exists."
@@ -303,12 +326,92 @@ and the third the column."
    t
    t))
 
+(defvar-local lsp-clojure--test-tree-data nil)
+(defconst lsp-clojure--test-tree-buffer-name "*Clojure Test Tree*")
+
+(defvar treemacs-position)
+(defvar treemacs-width)
+(declare-function lsp-treemacs-render "ext:lsp-treemacs" (tree title expand-depth &optional buffer-name))
+(declare-function lsp-treemacs--open-file-in-mru "ext:lsp-treemacs" (file))
+
+(defun lsp-clojure--test-tree-ret-action (uri range)
+  "Build the ret action for an item in the test tree view.
+URI is the source of the item.
+RANGE is the range of positions to where this item should point."
+  (interactive)
+  (lsp-treemacs--open-file-in-mru (lsp--uri-to-path uri))
+  (goto-char (lsp--position-to-point (lsp:range-start range)))
+  (run-hooks 'xref-after-jump-hook))
+
+(lsp-defun lsp-clojure--test-tree-data->tree (uri (&clojure-lsp:TestTreeNode :name :range :kind :children?))
+  "Builds a test tree.
+URI is the source of the test tree.
+NODE is the node with all test children data."
+  (-let* ((icon (cl-case kind
+                  (1 'namespace)
+                  (2 'method)
+                  (3 'field)))
+          (base-tree (list :key name
+                           :label name
+                           :icon icon
+                           :ret-action (lambda (&rest _) (lsp-clojure--test-tree-ret-action uri range))
+                           :uri uri)))
+    (if (seq-empty-p children?)
+        base-tree
+      base-tree
+      (plist-put base-tree :children (seq-map (-partial #'lsp-clojure--test-tree-data->tree uri) children?)))))
+
+(lsp-defun lsp-clojure--render-test-tree ((&clojure-lsp:TestTreeParams :uri :tree))
+  "Render a test tree view for current test tree buffer data."
+  (save-excursion
+    (lsp-treemacs-render
+     (list (lsp-clojure--test-tree-data->tree uri tree))
+     "Clojure Test Tree"
+     t
+     lsp-clojure--test-tree-buffer-name)))
+
+(defun lsp-clojure--show-test-tree (ignore-focus?)
+  "Show a test tree for current buffer.
+Focus on it if IGNORE-FOCUS? is nil."
+  (if lsp-clojure--test-tree-data
+      (-let* ((tree-buffer (lsp-clojure--render-test-tree lsp-clojure--test-tree-data))
+              (position-params (or lsp-clojure-test-tree-position-params
+                                   `((side . ,treemacs-position)
+                                     (slot . 2)
+                                     (window-width . ,treemacs-width))))
+              (window (display-buffer-in-side-window tree-buffer position-params)))
+        (unless ignore-focus?
+          (select-window window)
+          (set-window-dedicated-p window t)))
+    (unless ignore-focus?
+      (lsp-log "No Clojure test tree data found."))))
+
+(lsp-defun lsp-clojure--handle-test-tree (_workspace (notification &as &clojure-lsp:TestTreeParams :uri))
+  "Test tree notification handler for workspace WORKSPACE.
+NOTIFICATION is the test tree notification data received from server.
+It updates the test tree view data."
+  (when (require 'lsp-treemacs nil t)
+    (when-let (buffer (find-buffer-visiting (lsp--uri-to-path uri)))
+      (with-current-buffer buffer
+        (setq lsp-clojure--test-tree-data notification)
+        (when (get-buffer-window lsp-clojure--test-tree-buffer-name)
+          (lsp-clojure--show-test-tree t))))))
+
+;;;###autoload
+(defun lsp-clojure-show-test-tree (ignore-focus?)
+  "Show a test tree and focus on it if IGNORE-FOCUS? is nil."
+  (interactive "P")
+  (if (require 'lsp-treemacs nil t)
+      (lsp-clojure--show-test-tree ignore-focus?)
+    (error "The package lsp-treemacs is not installed")))
+
 (lsp-register-client
  (make-lsp-client
   :download-server-fn (lambda (_client callback error-callback _update?)
                         (lsp-package-ensure 'clojure-lsp callback error-callback))
   :semantic-tokens-faces-overrides '(:types (("macro" . font-lock-keyword-face)
-                                             ("keyword" . clojure-keyword-face)))
+                                             ("keyword" . clojure-keyword-face)
+                                             ("event" . default)))
   :new-connection (lsp-stdio-connection
                    (lambda ()
                      (or lsp-clojure-custom-server-command
@@ -319,17 +422,18 @@ and the third the column."
   :major-modes '(clojure-mode clojurec-mode clojurescript-mode)
   :library-folders-fn (lambda (_workspace) (list lsp-clojure-workspace-cache-dir))
   :uri-handlers (lsp-ht ("jar" #'lsp-clojure--file-in-jar))
-  :action-handlers (lsp-ht ("resolve-macro-as" #'lsp-clojure--resolve-macro-as)
-                           ("code-lens-references" #'lsp-clojure--show-references))
+  :action-handlers (lsp-ht ("code-lens-references" #'lsp-clojure--show-references))
+  :notification-handlers (lsp-ht ("clojure/textDocument/testTree" #'lsp-clojure--handle-test-tree))
   :initialization-options '(:dependency-scheme "jar"
                             :show-docs-arity-on-same-line? t)
+  :custom-capabilities `((experimental . ((testTree . ,(and (require 'lsp-treemacs nil t) t)))))
   :server-id 'clojure-lsp))
 
 (lsp-consistency-check lsp-clojure)
 
 ;; Cider integration
 
-(defun lsp-clojure-semantic-tokens-refresh ()
+(defun lsp-clojure-semantic-tokens-refresh (&rest _)
   "Force refresh semantic tokens."
   (when (and lsp-semantic-tokens-enable
              (lsp-find-workspace 'clojure-lsp (buffer-file-name)))

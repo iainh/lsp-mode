@@ -6,6 +6,29 @@
   * Added ~lsp-auto-touch-files~. When it is non-nil it will auto-create the
     file on the disk before sending ~textDocument/didOpen~.
   * Add ~lsp-log-io-allowlist-methods~ for debugging purposes.
+  * Enable `lsp-lens-enable` by default.
+  * Add TOML support.
+  * Add Nginx support.
+  * Disable noisy features from ~lsp-ui~: ~lsp-ui-sideline-show-code-actions~ and ~lsp-ui-doc-show-with-cursor~.
+  * Fix org mode support. #3258
+  * Add [[https://github.com/remarkjs/remark-language-server][remark-language-server]]
+  * Deprecate unified-languge-server in favor of remark-language-server
+  * Made it possible to disable ~lsp-response-timeout~ entirely.
+  * Fix csharp-ls startup on emacs@master (and emacs@emacs-28 on macOS) due to a switch posix_spawn and not setting proper sigmask on child processes.
+  * Fix incorrect ~lsp-fsharp~ defcustom types.
+  * Add ~lsp-fsharp-generate-binlog~.
+  * Update installation mechanism for fsautocomplete (lsp-fsharp) to use ~dotnet tool install -g~.
+  * Fix fsautocomplete (lsp-fsharp) startup on emacs@master (and emacs@emacs-28 on macOS) due to
+    a switch ~posix_spawn~ and not setting proper sigmask on child processes.
+  * Add TypeProf support.
+  * Add Volar support.
+  * Add Ansible support.
+  * Disable ~lsp-steep-use-bundler~ by default.
+  * Add [[https://github.com/idris-community/idris2-lsp][idris2-lsp]]
+  * Add [[https://github.com/aca/emmet-ls][emmet-ls]]
+  * Support all ~initializationOptions~ in ~typescript-language-server~
+  * Update rust-analyzer's inlay hint protocol support.
+  * Add support for ~typescript-language-server~’s inlay hints.
 ** Release 8.0.0
   * Add ~lsp-clients-angular-node-get-prefix-command~ to get the Angular server from another location which is still has ~/lib/node_modules~ in it.
   * Set ~lsp-clients-angular-language-server-command~ after the first connection to speed up subsequent connections.
@@ -15,7 +38,7 @@
   * Add support for insert/replace when performing completion. When using
     ~company~ pressing ~C-u RET~ will perform the alternative action (the
     default is replace, but can be changed).
-  * Add ~lsp-auto-save-changed-buffers~ which save the changed buffers after any text edit operation by lsp-mode.
+  * Add ~lsp-after-apply-edits-hook~ that run after every workspace edit is applied.
   * Safe renamed ~lsp-diagnose~ to ~lsp-doctor~.
   * Add ~lsp-modeline-code-actions-segments~ for a better customization.
   * Add [[https://github.com/sumneko/lua-language-server][Lua Language Server]], [[https://github.com/Alloyed/lua-lsp][Lua-LSP]] and improve EmmyLua.

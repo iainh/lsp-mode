@@ -47,7 +47,7 @@
 (declare-function flycheck-error-group "ext:flycheck" (err) t)
 (declare-function flycheck-error-message "ext:flycheck" (err) t)
 
-(defcustom lsp-clangd-version "12.0.0"
+(defcustom lsp-clangd-version "13.0.0"
   "Clangd version to download.
 It has to be set before `lsp-clangd.el' is loaded and it has to
 be available here: https://github.com/clangd/clangd/releases/"
@@ -218,6 +218,13 @@ This must be set only once after loading the clang client.")
   :risky t
   :type '(repeat string))
 
+(defcustom lsp-clients-clangd-library-directories '("/usr")
+  "List of directories which will be considered to be libraries."
+  :risky t
+  :type '(repeat string)
+  :group 'lsp-clangd
+  :package-version '(lsp-mode . "8.0.1"))
+
 (defun lsp-clients--clangd-command ()
   "Generate the language server startup command."
   (unless lsp-clients--clangd-default-executable
@@ -226,7 +233,10 @@ This must be set only once after loading the clang client.")
               (-first #'executable-find
                       (-map (lambda (version)
                               (concat "clangd" version))
-                            '("" "-12" "-11" "-10" "-9" "-8" "-7" "-6")))
+                            ;; Prefer `clangd` without a version number appended.
+                            (cl-list* "" (-map
+                                          (lambda (vernum) (format "-%d" vernum))
+                                          (number-sequence 14 6 -1)))))
               (lsp-clients-executable-find "xcodebuild" "-find-executable" "clangd")
               (lsp-clients-executable-find "xcrun" "--find" "clangd"))))
 
@@ -239,6 +249,7 @@ This must be set only once after loading the clang client.")
                   :activation-fn (lsp-activate-on "c" "cpp" "objective-c")
                   :priority -1
                   :server-id 'clangd
+                  :library-folders-fn (lambda (_workspace) lsp-clients-clangd-library-directories)
                   :download-server-fn (lambda (_client callback error-callback _update?)
                                         (lsp-package-ensure 'clangd callback error-callback))))
 
