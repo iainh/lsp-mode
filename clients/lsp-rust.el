@@ -695,9 +695,7 @@ or JSON objects in `rust-project.json` format."
                   :allTargets ,(lsp-json-bool lsp-rust-analyzer-cargo-all-targets)
                   :overrideCommand ,lsp-rust-analyzer-cargo-override-command)
     :files (:exclude ,lsp-rust-analyzer-exclude-globs
-            :watcher ,(lsp-json-bool (if lsp-rust-analyzer-use-client-watching
-                                         "client"
-                                       "notify"))
+            :watcher ,(if lsp-rust-analyzer-use-client-watching "client" "notify")
             :excludeDirs ,lsp-rust-analyzer-exclude-dirs)
     :cargo (:allFeatures ,(lsp-json-bool lsp-rust-all-features)
             :noDefaultFeatures ,(lsp-json-bool lsp-rust-no-default-features)
@@ -1121,7 +1119,7 @@ https://github.com/rust-analyzer/rust-analyzer/blob/master/docs/dev/lsp-extensio
 If NEW-WINDOW (interactively the prefix argument) is non-nil,
 open in a new window."
   (interactive "P")
-  (-if-let (workspace (lsp-find-workspace 'rust-analyzer))
+  (-if-let (workspace (lsp-find-workspace 'rust-analyzer (buffer-file-name)))
       (-if-let* ((response (with-lsp-workspace workspace
                              (lsp-send-request (lsp-make-request
                                                 "experimental/openCargoToml"
